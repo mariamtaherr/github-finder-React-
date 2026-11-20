@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import SearchBar from "./components/SearchBar.jsx";
 import ProfileCard from "./components/ProfileCard.jsx";
 import StatusMessage from "./components/StatusMessage.jsx";
+import Repositories from "./components/Repositories.jsx";
 
 const SUGGESTIONS = ["torvalds", "gaearon", "sindresorhus"];
 
@@ -11,6 +12,9 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [repos, setRepos] = useState([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [reposError, setReposError] = useState("");
 
   // Commit the typed value as the searched username
   const handleSearch = (value = input) => {
@@ -60,6 +64,44 @@ export default function App() {
     return () => controller.abort();
   }, [username]);
 
+  useEffect(() => {
+    if (!user?.login) {
+      setRepos([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchRepositories() {
+      setReposLoading(true);
+      setReposError("");
+      try {
+        const response = await fetch(
+          `https://api.github.com/users/${encodeURIComponent(user.login)}/repos?sort=updated&per_page=6`,
+          { signal: controller.signal }
+        );
+
+        if (response.status === 403) {
+          throw new Error("GitHub's API rate limit was reached. Try again shortly.");
+        }
+        if (!response.ok) {
+          throw new Error("Could not load repositories.");
+        }
+
+        const data = await response.json();
+        setRepos(data);
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        setReposError(err.message || "Could not load repositories.");
+      } finally {
+        if (!controller.signal.aborted) setReposLoading(false);
+      }
+    }
+
+    fetchRepositories();
+    return () => controller.abort();
+  }, [user?.login]);
+
   const pick = (name) => {
     setInput(name);
     handleSearch(name);
@@ -97,7 +139,16 @@ export default function App() {
       <section className="mt-10" aria-live="polite">
         {loading && <StatusMessage type="loading" text="Fetching profile…" />}
         {!loading && error && <StatusMessage type="error" text={error} />}
-        {!loading && !error && user && <ProfileCard user={user} />}
+        {!loading && !error && user && (
+          <>
+            <ProfileCard user={user} />
+            <Repositories
+              repos={repos}
+              loading={reposLoading}
+              error={reposError}
+            />
+          </>
+        )}
         {!loading && !error && !user && (
           <StatusMessage
             type="empty"
