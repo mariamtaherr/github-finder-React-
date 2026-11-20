@@ -3,5 +3,5 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/github-finder-React-/",
+  base: process.env.GITHUB_ACTIONS === "true" ? "/github-finder-React-/" : "/",
 });
